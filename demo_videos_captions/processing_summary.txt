@@ -1,0 +1,16 @@
+Caption Generation Summary
+==============================
+
+Total videos: 5
+Successful: 5
+Failed: 0
+Model used: medium
+Language: en
+
+Details:
+--------------------
+✅ demo_videos/1.mp4 -> demo_videos_captions\1_captions.txt
+✅ demo_videos/2.mp4 -> demo_videos_captions\2_captions.txt
+✅ demo_videos/3.mp4 -> demo_videos_captions\3_captions.txt
+✅ demo_videos/4.mp4 -> demo_videos_captions\4_captions.txt
+✅ demo_videos/5.mp4 -> demo_videos_captions\5_captions.txt
