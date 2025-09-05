@@ -241,42 +241,42 @@ def main():
         )
         
         if uploaded_files is not None:
-        # Display video info
-        col1, col2, col3 = st.columns(3)
-        with col1:
+            # Display video info
+            col1, col2, col3 = st.columns(3)
+            with col1:
                 st.metric("📁 File Name", uploaded_files.name)
-        with col2:
+            with col2:
                 st.metric("📊 File Size", f"{uploaded_files.size / (1024*1024):.1f} MB")
-        with col3:
-            st.metric("🤖 Model", model_size)
-        
-        # Process button
-        if st.button("🚀 Generate Captions", type="primary"):
-                captions = process_video(uploaded_files, model_size, language, uploaded_files.name)
+            with col3:
+                st.metric("🤖 Model", model_size)
             
-            if captions:
-                st.success("Captions generated successfully!")
+            # Process button
+            if st.button("🚀 Generate Captions", type="primary"):
+                captions = process_video(uploaded_files, model_size, language, uploaded_files.name)
                 
-                # Display captions
-                st.header("📝 Generated Captions")
-                st.text_area(
-                    "Captions",
-                    captions,
-                    height=300,
-                    help="Copy the text below to use in your video editing software"
-                )
-                
-                # Download button
-                st.download_button(
-                    label="💾 Download Captions as TXT",
-                    data=captions,
+                if captions:
+                    st.success("Captions generated successfully!")
+                    
+                    # Display captions
+                    st.header("📝 Generated Captions")
+                    st.text_area(
+                        "Captions",
+                        captions,
+                        height=300,
+                        help="Copy the text below to use in your video editing software"
+                    )
+                    
+                    # Download button
+                    st.download_button(
+                        label="💾 Download Captions as TXT",
+                        data=captions,
                         file_name=f"{Path(uploaded_files.name).stem}_captions.txt",
-                    mime="text/plain"
-                )
-                
-                # Display word count
-                word_count = len(captions.split())
-                st.info(f"📊 Caption Statistics: {word_count} words, {len(captions)} characters")
+                        mime="text/plain"
+                    )
+                    
+                    # Display word count
+                    word_count = len(captions.split())
+                    st.info(f"📊 Caption Statistics: {word_count} words, {len(captions)} characters")
     
     else:  # Multiple Videos (Batch)
         # Multiple file uploader
