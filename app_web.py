@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 import time
+import re
 
 # Check if FFmpeg is available
 def check_ffmpeg():
@@ -162,6 +163,86 @@ def process_batch_videos(video_files, model_size="base", language=None):
     status_text.text("Batch processing completed!")
     return results
 
+def generate_youtube_description(captions, video_title="", include_timestamps=False, include_hashtags=True):
+    """Generate YouTube description from captions"""
+    try:
+        # Clean and process captions
+        clean_captions = captions.strip()
+        
+        # Extract key phrases and words
+        words = clean_captions.lower().split()
+        word_freq = {}
+        for word in words:
+            # Remove punctuation and filter meaningful words
+            clean_word = re.sub(r'[^\w]', '', word)
+            if len(clean_word) > 3 and clean_word not in ['this', 'that', 'with', 'from', 'they', 'have', 'been', 'were', 'said', 'each', 'which', 'their', 'time', 'will', 'about', 'there', 'could', 'other', 'after', 'first', 'well', 'also', 'where', 'much', 'some', 'very', 'when', 'come', 'here', 'just', 'like', 'long', 'make', 'many', 'over', 'such', 'take', 'than', 'them', 'these', 'think', 'want', 'what', 'year', 'your', 'good', 'know', 'look', 'most', 'only', 'other', 'right', 'seem', 'tell', 'turn', 'use', 'way', 'work', 'part', 'place', 'same', 'time', 'help', 'line', 'move', 'play', 'point', 'put', 'show', 'small', 'sound', 'still', 'study', 'such', 'take', 'than', 'them', 'these', 'think', 'three', 'through', 'today', 'together', 'until', 'water', 'while', 'world', 'write', 'young']:
+                word_freq[clean_word] = word_freq.get(clean_word, 0) + 1
+        
+        # Get top keywords
+        top_keywords = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:10]
+        keywords = [word for word, freq in top_keywords]
+        
+        # Generate description sections
+        description_parts = []
+        
+        # Main description
+        if video_title:
+            description_parts.append(f"🎬 {video_title}")
+            description_parts.append("")
+        
+        # Video summary
+        description_parts.append("📝 Video Summary:")
+        # Take first 2-3 sentences as summary
+        sentences = re.split(r'[.!?]+', clean_captions)
+        summary_sentences = [s.strip() for s in sentences[:3] if s.strip()]
+        description_parts.append(" ".join(summary_sentences) + ".")
+        description_parts.append("")
+        
+        # Key topics
+        if keywords:
+            description_parts.append("🔑 Key Topics:")
+            description_parts.append(", ".join(keywords[:8]))
+            description_parts.append("")
+        
+        # Timestamps (if requested)
+        if include_timestamps:
+            description_parts.append("⏰ Timestamps:")
+            # Simple timestamp generation based on sentence count
+            sentences = [s.strip() for s in re.split(r'[.!?]+', clean_captions) if s.strip()]
+            total_sentences = len(sentences)
+            if total_sentences > 0:
+                for i in range(0, min(total_sentences, 5), 2):  # Every 2nd sentence, max 5 timestamps
+                    minutes = (i * 2) // 60
+                    seconds = (i * 2) % 60
+                    timestamp = f"{minutes:02d}:{seconds:02d}"
+                    sentence = sentences[i][:50] + "..." if len(sentences[i]) > 50 else sentences[i]
+                    description_parts.append(f"{timestamp} - {sentence}")
+            description_parts.append("")
+        
+        # Call to action
+        description_parts.append("👍 If you enjoyed this video, please:")
+        description_parts.append("• Like and subscribe for more content")
+        description_parts.append("• Share with your friends")
+        description_parts.append("• Leave a comment below")
+        description_parts.append("")
+        
+        # Hashtags (if requested)
+        if include_hashtags and keywords:
+            description_parts.append("🏷️ Tags:")
+            hashtags = ["#" + word.replace(" ", "") for word in keywords[:8]]
+            description_parts.append(" ".join(hashtags))
+            description_parts.append("")
+        
+        # Footer
+        description_parts.append("─" * 50)
+        description_parts.append("📺 Subscribe to our channel for more amazing content!")
+        description_parts.append("🔔 Turn on notifications to never miss a video!")
+        
+        return "\n".join(description_parts)
+        
+    except Exception as e:
+        return f"Error generating description: {e}"
+
 def main():
     st.set_page_config(
         page_title="Caption Generator App",
@@ -212,6 +293,34 @@ def main():
         help="Specify language for better accuracy, or use auto-detect"
     )
     language = language_options[selected_language]
+    
+    # YouTube Description Options
+    st.sidebar.header("📺 YouTube Description")
+    
+    generate_description = st.sidebar.checkbox(
+        "Generate YouTube Description",
+        value=True,
+        help="Automatically generate YouTube description from captions"
+    )
+    
+    if generate_description:
+        video_title = st.sidebar.text_input(
+            "Video Title (Optional)",
+            placeholder="Enter your video title",
+            help="Title will be included in the description"
+        )
+        
+        include_timestamps = st.sidebar.checkbox(
+            "Include Timestamps",
+            value=False,
+            help="Add timestamps to the description"
+        )
+        
+        include_hashtags = st.sidebar.checkbox(
+            "Include Hashtags",
+            value=True,
+            help="Add relevant hashtags to the description"
+        )
     
     # Main content area
     st.header("📹 Upload Your Videos")
@@ -266,7 +375,7 @@ def main():
                         help="Copy the text below to use in your video editing software"
                     )
                     
-                    # Download button
+                    # Download captions button
                     st.download_button(
                         label="💾 Download Captions as TXT",
                         data=captions,
@@ -277,6 +386,42 @@ def main():
                     # Display word count
                     word_count = len(captions.split())
                     st.info(f"📊 Caption Statistics: {word_count} words, {len(captions)} characters")
+                    
+                    # Generate YouTube Description
+                    if generate_description:
+                        st.header("📺 YouTube Description")
+                        
+                        with st.spinner("Generating YouTube description..."):
+                            youtube_desc = generate_youtube_description(
+                                captions, 
+                                video_title, 
+                                include_timestamps, 
+                                include_hashtags
+                            )
+                        
+                        st.text_area(
+                            "YouTube Description",
+                            youtube_desc,
+                            height=400,
+                            help="Copy this description to use in your YouTube video"
+                        )
+                        
+                        # Download YouTube description button
+                        st.download_button(
+                            label="📺 Download YouTube Description",
+                            data=youtube_desc,
+                            file_name=f"{Path(uploaded_files.name).stem}_youtube_description.txt",
+                            mime="text/plain"
+                        )
+                        
+                        # Combined download (captions + description)
+                        combined_content = f"=== CAPTIONS ===\n\n{captions}\n\n\n=== YOUTUBE DESCRIPTION ===\n\n{youtube_desc}"
+                        st.download_button(
+                            label="📦 Download Both (Captions + Description)",
+                            data=combined_content,
+                            file_name=f"{Path(uploaded_files.name).stem}_complete.txt",
+                            mime="text/plain"
+                        )
     
     else:  # Multiple Videos (Batch)
         # Multiple file uploader
@@ -350,15 +495,44 @@ def main():
                             label_visibility="collapsed"
                         )
                         
-                        # Download button for each file
+                        # Download captions button
                         st.download_button(
-                            label=f"💾 Download {Path(result['filename']).stem} Captions",
+                            label=f"💾 Captions",
                             data=result['captions'],
                             file_name=f"{Path(result['filename']).stem}_captions.txt",
                             mime="text/plain",
-                            key=f"download_{result['filename']}",
+                            key=f"download_captions_{result['filename']}",
                             use_container_width=True
                         )
+                        
+                        # Generate and download YouTube description if enabled
+                        if generate_description:
+                            youtube_desc = generate_youtube_description(
+                                result['captions'], 
+                                video_title, 
+                                include_timestamps, 
+                                include_hashtags
+                            )
+                            
+                            st.download_button(
+                                label=f"📺 YouTube Desc",
+                                data=youtube_desc,
+                                file_name=f"{Path(result['filename']).stem}_youtube_description.txt",
+                                mime="text/plain",
+                                key=f"download_youtube_{result['filename']}",
+                                use_container_width=True
+                            )
+                            
+                            # Combined download
+                            combined_content = f"=== CAPTIONS ===\n\n{result['captions']}\n\n\n=== YOUTUBE DESCRIPTION ===\n\n{youtube_desc}"
+                            st.download_button(
+                                label=f"📦 Both",
+                                data=combined_content,
+                                file_name=f"{Path(result['filename']).stem}_complete.txt",
+                                mime="text/plain",
+                                key=f"download_combined_{result['filename']}",
+                                use_container_width=True
+                            )
                         
                         # Add some spacing
                         st.markdown("---")

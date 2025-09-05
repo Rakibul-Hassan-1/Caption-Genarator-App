@@ -66,6 +66,7 @@ docker run -p 8501:8501 caption-generator
 - 🌍 **Multi-language** - Support for 10+ languages
 - 📊 **Real-time Progress** - Live processing updates for batch operations
 - 💾 **Download Results** - Individual caption downloads for each video
+- 📺 **YouTube Descriptions** - Auto-generate YouTube descriptions from captions
 - 🎨 **Modern UI** - Clean, professional interface
 - 📦 **Batch Processing** - Process multiple videos with progress tracking
 
@@ -131,6 +132,22 @@ python app.py --folder your_videos_folder/
 - 🎯 **Error Handling**: Clear success/failure reporting
 - 💾 **Organized Results**: Each video's captions are clearly labeled
 - 🎨 **Clean Layout**: Results displayed in organized columns
+
+## 📺 **YouTube Description Generator:**
+
+### **Automatic Description Creation:**
+- 🎬 **Video Summary**: Auto-generated from captions
+- 🔑 **Key Topics**: Extracted keywords and topics
+- ⏰ **Timestamps**: Optional timestamp generation
+- 🏷️ **Hashtags**: Relevant hashtags for better discoverability
+- 👍 **Call to Action**: Professional engagement prompts
+- 📺 **Channel Promotion**: Subscribe and notification prompts
+
+### **Customization Options:**
+- **Video Title**: Add your custom video title
+- **Timestamps**: Include/exclude timestamps
+- **Hashtags**: Include/exclude hashtags
+- **Download Options**: Captions only, description only, or both combined
 
 ## 🆘 **Troubleshooting:**
 
