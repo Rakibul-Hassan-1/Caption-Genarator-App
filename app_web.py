@@ -241,42 +241,42 @@ def main():
         )
         
         if uploaded_files is not None:
-            # Display video info
-            col1, col2, col3 = st.columns(3)
-            with col1:
+        # Display video info
+        col1, col2, col3 = st.columns(3)
+        with col1:
                 st.metric("📁 File Name", uploaded_files.name)
-            with col2:
+        with col2:
                 st.metric("📊 File Size", f"{uploaded_files.size / (1024*1024):.1f} MB")
-            with col3:
-                st.metric("🤖 Model", model_size)
-            
-            # Process button
-            if st.button("🚀 Generate Captions", type="primary"):
+        with col3:
+            st.metric("🤖 Model", model_size)
+        
+        # Process button
+        if st.button("🚀 Generate Captions", type="primary"):
                 captions = process_video(uploaded_files, model_size, language, uploaded_files.name)
+            
+            if captions:
+                st.success("Captions generated successfully!")
                 
-                if captions:
-                    st.success("Captions generated successfully!")
-                    
-                    # Display captions
-                    st.header("📝 Generated Captions")
-                    st.text_area(
-                        "Captions",
-                        captions,
-                        height=300,
-                        help="Copy the text below to use in your video editing software"
-                    )
-                    
-                    # Download button
-                    st.download_button(
-                        label="💾 Download Captions as TXT",
-                        data=captions,
+                # Display captions
+                st.header("📝 Generated Captions")
+                st.text_area(
+                    "Captions",
+                    captions,
+                    height=300,
+                    help="Copy the text below to use in your video editing software"
+                )
+                
+                # Download button
+                st.download_button(
+                    label="💾 Download Captions as TXT",
+                    data=captions,
                         file_name=f"{Path(uploaded_files.name).stem}_captions.txt",
-                        mime="text/plain"
-                    )
-                    
-                    # Display word count
-                    word_count = len(captions.split())
-                    st.info(f"📊 Caption Statistics: {word_count} words, {len(captions)} characters")
+                    mime="text/plain"
+                )
+                
+                # Display word count
+                word_count = len(captions.split())
+                st.info(f"📊 Caption Statistics: {word_count} words, {len(captions)} characters")
     
     else:  # Multiple Videos (Batch)
         # Multiple file uploader
@@ -378,24 +378,17 @@ def main():
                 st.session_state.batch_processed = False
                 st.rerun()
     
-    # Demo section
-    st.header("🎬 Demo Videos Available")
+    # Tips section
+    st.header("💡 Tips for Best Results")
     
-    demo_folder = "demo_videos"
-    if os.path.exists(demo_folder):
-        demo_videos = [f for f in os.listdir(demo_folder) if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv'))]
-        
-        if demo_videos:
-            st.info(f"Found {len(demo_videos)} demo videos in the {demo_folder} folder:")
-            for i, video in enumerate(demo_videos, 1):
-                st.write(f"{i}. {video}")
-            
-            st.markdown("**To process these videos, use the command line:**")
-            st.code("python app.py --folder demo_videos/")
-        else:
-            st.warning("No demo videos found in the demo_videos folder")
-    else:
-        st.warning("Demo videos folder not found")
+    st.markdown("""
+    **For optimal caption quality:**
+    - Use **medium** or **large** models for better accuracy
+    - Specify the correct language for your content
+    - Ensure your videos have clear audio
+    - For long videos, processing may take several minutes
+    - Batch processing shows progress for each video
+    """)
     
     # Instructions section
     with st.expander("📖 How to Use"):
@@ -429,7 +422,7 @@ def main():
         If the web interface has issues, you can always use the command line:
         ```bash
         python app.py your_video.mp4
-        python app.py --folder demo_videos/
+        python app.py --folder your_videos_folder/
         ```
         """)
     

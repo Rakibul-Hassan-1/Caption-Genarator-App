@@ -37,30 +37,26 @@ python app.py --folder demo_videos/
 python app.py your_video.mp4 --model large --language en
 ```
 
-## 🐳 **Option 3: Docker (Production Ready)**
+## 🐳 **Option 3: Docker (Optional)**
 
 ```bash
 # Build and run with Docker
-docker-compose up --build
+docker build -t caption-generator .
+docker run -p 8501:8501 caption-generator
 
 # Access at: http://localhost:8501
 ```
 
-## ☁️ **Option 4: Cloud Deployment**
+## ☁️ **Option 4: Streamlit Cloud Deployment (Free)**
 
-### **Streamlit Cloud (Free):**
-1. Push to GitHub
-2. Go to https://share.streamlit.io/
-3. Connect repository
-4. Set main file to: `app_web.py`
-5. Deploy!
-
-### **Heroku (Free tier):**
-```bash
-heroku create your-caption-app
-heroku buildpacks:add https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git
-git push heroku main
-```
+1. **Push to GitHub**: `git push origin main`
+2. **Go to Streamlit Cloud**: https://share.streamlit.io/
+3. **Sign in with GitHub**
+4. **Deploy New App**:
+   - Select your repository
+   - Main file: `app_web.py`
+   - Click "Deploy!"
+5. **Your app is live**: `https://your-app-name.streamlit.app`
 
 ## 🎯 **What You Get:**
 
@@ -89,23 +85,29 @@ git push heroku main
 ## 📦 **Files Included:**
 
 - `app_web.py` - **Main web application**
-- `app.py` - **Original command-line version**
-- `install_and_run.py` - **Automatic setup script**
-- `Dockerfile` - **Docker configuration**
-- `docker-compose.yml` - **Easy Docker deployment**
+- `app.py` - **Command-line version**
 - `requirements.txt` - **Python dependencies**
+- `packages.txt` - **FFmpeg for Streamlit Cloud**
+- `README.md` - **Documentation**
 
-## 🎬 **Demo Videos:**
+## 🎬 **How to Use:**
 
-Your app includes 5 demo videos in the `demo_videos/` folder:
-- `1.mp4`, `2.mp4`, `3.mp4`, `4.mp4`, `5.mp4`
+### **Web Interface:**
+1. Run: `streamlit run app_web.py`
+2. Upload your videos (single or batch)
+3. Choose model and language settings
+4. Generate and download captions
 
-Process them with:
+### **Command Line:**
 ```bash
-# Command line
-python app.py --folder demo_videos/
+# Single video
+python app.py your_video.mp4
 
-# Web interface - use batch upload mode
+# Multiple videos
+python app.py video1.mp4 video2.mp4 video3.mp4
+
+# Process folder
+python app.py --folder your_videos_folder/
 ```
 
 ## 📦 **New Batch Upload Feature:**
