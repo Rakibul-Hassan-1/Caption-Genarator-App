@@ -165,16 +165,22 @@ def process_batch_videos(video_files, model_size="base", language=None):
     status_text.text("Batch processing completed!")
     return results
 
-def generate_youtube_description_with_llm(captions, video_title="", custom_prompt="", include_timestamps=False, include_hashtags=True):
+def generate_youtube_description_with_llm(captions, video_title="", custom_prompt="", include_timestamps=False, include_hashtags=True, use_openai=False):
     """Generate YouTube description using LLM (OpenAI API or local model)"""
     try:
-        # Check if OpenAI API key is available
-        openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
+        # Check if OpenAI API key is available and user wants to use it
+        if use_openai:
+            try:
+                openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
+                if openai_api_key:
+                    return generate_with_openai(captions, video_title, custom_prompt, include_timestamps, include_hashtags, openai_api_key)
+                else:
+                    st.warning("OpenAI API key not found in secrets. Using local generation instead.")
+            except Exception as e:
+                st.warning(f"Could not access OpenAI API: {e}. Using local generation instead.")
         
-        if openai_api_key:
-            return generate_with_openai(captions, video_title, custom_prompt, include_timestamps, include_hashtags, openai_api_key)
-        else:
-            return generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags)
+        # Use local generation (fallback or default)
+        return generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags)
             
     except Exception as e:
         return f"Error generating description: {e}"
@@ -266,23 +272,40 @@ def generate_with_local_llm(captions, video_title, custom_prompt, include_timest
             description_parts.append(f"🎬 {video_title}")
             description_parts.append("")
         
-        # Custom prompt integration
+        # Custom prompt integration - make it more prominent
         if custom_prompt:
             description_parts.append("📝 About This Video:")
             description_parts.append(custom_prompt)
             description_parts.append("")
         
-        # Video summary
+        # Enhanced video summary based on custom prompt
         description_parts.append("📖 Video Summary:")
         sentences = re.split(r'[.!?]+', clean_captions)
         summary_sentences = [s.strip() for s in sentences[:3] if s.strip()]
-        description_parts.append(" ".join(summary_sentences) + ".")
+        
+        # If custom prompt mentions specific topics, try to include them
+        if custom_prompt and any(word in custom_prompt.lower() for word in ['tutorial', 'guide', 'how to', 'learn', 'education']):
+            description_parts.append("This educational video covers: " + " ".join(summary_sentences) + ".")
+        elif custom_prompt and any(word in custom_prompt.lower() for word in ['review', 'test', 'comparison']):
+            description_parts.append("In this review video, we explore: " + " ".join(summary_sentences) + ".")
+        elif custom_prompt and any(word in custom_prompt.lower() for word in ['entertainment', 'fun', 'comedy']):
+            description_parts.append("Join us for this entertaining content: " + " ".join(summary_sentences) + ".")
+        else:
+            description_parts.append(" ".join(summary_sentences) + ".")
+        
         description_parts.append("")
         
-        # Key topics
+        # Key topics with better formatting
         if keywords:
             description_parts.append("🔑 Key Topics:")
-            description_parts.append(", ".join(keywords[:8]))
+            # Group related keywords
+            topic_groups = []
+            for keyword in keywords[:8]:
+                if keyword not in [word for group in topic_groups for word in group]:
+                    topic_groups.append([keyword])
+            
+            topics_text = ", ".join(keywords[:8])
+            description_parts.append(topics_text)
             description_parts.append("")
         
         # Timestamps (if requested)
@@ -299,9 +322,17 @@ def generate_with_local_llm(captions, video_title, custom_prompt, include_timest
                     description_parts.append(f"{timestamp} - {sentence}")
             description_parts.append("")
         
-        # Call to action
+        # Enhanced call to action based on custom prompt
         description_parts.append("👍 If you enjoyed this video, please:")
-        description_parts.append("• Like and subscribe for more content")
+        if custom_prompt and any(word in custom_prompt.lower() for word in ['tutorial', 'guide', 'learn']):
+            description_parts.append("• Like if this tutorial helped you")
+            description_parts.append("• Subscribe for more educational content")
+        elif custom_prompt and any(word in custom_prompt.lower() for word in ['review', 'test']):
+            description_parts.append("• Like if you found this review helpful")
+            description_parts.append("• Subscribe for more reviews and tests")
+        else:
+            description_parts.append("• Like and subscribe for more content")
+        
         description_parts.append("• Share with your friends")
         description_parts.append("• Leave a comment below")
         description_parts.append("")
@@ -496,7 +527,8 @@ def main():
                                 video_title, 
                                 custom_prompt,
                                 include_timestamps, 
-                                include_hashtags
+                                include_hashtags,
+                                use_openai
                             )
                         
                         st.text_area(
@@ -612,7 +644,8 @@ def main():
                                 video_title, 
                                 custom_prompt,
                                 include_timestamps, 
-                                include_hashtags
+                                include_hashtags,
+                                use_openai
                             )
                             
                             st.download_button(
@@ -727,7 +760,7 @@ def main():
                 st.success("✅ OpenAI API configured")
             else:
                 st.info("ℹ️ OpenAI API not configured")
-        except:
+        except Exception:
             st.info("ℹ️ OpenAI API not configured")
     
     # OpenAI API Setup Instructions
