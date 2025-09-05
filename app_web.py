@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 import time
 import re
+import requests
+import json
 
 # Check if FFmpeg is available
 def check_ffmpeg():
@@ -163,8 +165,83 @@ def process_batch_videos(video_files, model_size="base", language=None):
     status_text.text("Batch processing completed!")
     return results
 
-def generate_youtube_description(captions, video_title="", include_timestamps=False, include_hashtags=True):
-    """Generate YouTube description from captions"""
+def generate_youtube_description_with_llm(captions, video_title="", custom_prompt="", include_timestamps=False, include_hashtags=True):
+    """Generate YouTube description using LLM (OpenAI API or local model)"""
+    try:
+        # Check if OpenAI API key is available
+        openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
+        
+        if openai_api_key:
+            return generate_with_openai(captions, video_title, custom_prompt, include_timestamps, include_hashtags, openai_api_key)
+        else:
+            return generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags)
+            
+    except Exception as e:
+        return f"Error generating description: {e}"
+
+def generate_with_openai(captions, video_title, custom_prompt, include_timestamps, include_hashtags, api_key):
+    """Generate description using OpenAI API"""
+    try:
+        # Prepare the prompt
+        system_prompt = """You are a professional YouTube content creator and SEO expert. Create an engaging, SEO-optimized YouTube description based on the video captions provided. The description should be professional, engaging, and optimized for YouTube's algorithm."""
+        
+        user_prompt = f"""
+Create a YouTube description for this video:
+
+Video Title: {video_title if video_title else "Untitled Video"}
+
+Video Captions:
+{captions}
+
+Custom Instructions: {custom_prompt if custom_prompt else "Create a professional YouTube description"}
+
+Requirements:
+- Include a compelling summary of the video content
+- Add relevant keywords for SEO
+- Include a call-to-action for engagement
+- Make it engaging and professional
+- Keep it under 5000 characters (YouTube limit)
+{"- Include timestamps if the video is long enough" if include_timestamps else ""}
+{"- Include relevant hashtags at the end" if include_hashtags else ""}
+
+Format the description with proper sections and emojis for better readability.
+"""
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "gpt-3.5-turbo",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "max_tokens": 1000,
+            "temperature": 0.7
+        }
+        
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        else:
+            st.error(f"OpenAI API Error: {response.status_code}")
+            return generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags)
+            
+    except Exception as e:
+        st.warning(f"OpenAI API failed: {e}. Using local generation.")
+        return generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags)
+
+def generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags):
+    """Generate description using local processing (fallback)"""
     try:
         # Clean and process captions
         clean_captions = captions.strip()
@@ -173,9 +250,8 @@ def generate_youtube_description(captions, video_title="", include_timestamps=Fa
         words = clean_captions.lower().split()
         word_freq = {}
         for word in words:
-            # Remove punctuation and filter meaningful words
             clean_word = re.sub(r'[^\w]', '', word)
-            if len(clean_word) > 3 and clean_word not in ['this', 'that', 'with', 'from', 'they', 'have', 'been', 'were', 'said', 'each', 'which', 'their', 'time', 'will', 'about', 'there', 'could', 'other', 'after', 'first', 'well', 'also', 'where', 'much', 'some', 'very', 'when', 'come', 'here', 'just', 'like', 'long', 'make', 'many', 'over', 'such', 'take', 'than', 'them', 'these', 'think', 'want', 'what', 'year', 'your', 'good', 'know', 'look', 'most', 'only', 'other', 'right', 'seem', 'tell', 'turn', 'use', 'way', 'work', 'part', 'place', 'same', 'time', 'help', 'line', 'move', 'play', 'point', 'put', 'show', 'small', 'sound', 'still', 'study', 'such', 'take', 'than', 'them', 'these', 'think', 'three', 'through', 'today', 'together', 'until', 'water', 'while', 'world', 'write', 'young']:
+            if len(clean_word) > 3 and clean_word not in ['this', 'that', 'with', 'from', 'they', 'have', 'been', 'were', 'said', 'each', 'which', 'their', 'time', 'will', 'about', 'there', 'could', 'other', 'after', 'first', 'well', 'also', 'where', 'much', 'some', 'very', 'when', 'come', 'here', 'just', 'like', 'long', 'make', 'many', 'over', 'such', 'take', 'than', 'them', 'these', 'think', 'want', 'what', 'year', 'your', 'good', 'know', 'look', 'most', 'only', 'other', 'right', 'seem', 'tell', 'turn', 'use', 'way', 'work']:
                 word_freq[clean_word] = word_freq.get(clean_word, 0) + 1
         
         # Get top keywords
@@ -190,9 +266,14 @@ def generate_youtube_description(captions, video_title="", include_timestamps=Fa
             description_parts.append(f"🎬 {video_title}")
             description_parts.append("")
         
+        # Custom prompt integration
+        if custom_prompt:
+            description_parts.append("📝 About This Video:")
+            description_parts.append(custom_prompt)
+            description_parts.append("")
+        
         # Video summary
-        description_parts.append("📝 Video Summary:")
-        # Take first 2-3 sentences as summary
+        description_parts.append("📖 Video Summary:")
         sentences = re.split(r'[.!?]+', clean_captions)
         summary_sentences = [s.strip() for s in sentences[:3] if s.strip()]
         description_parts.append(" ".join(summary_sentences) + ".")
@@ -207,11 +288,10 @@ def generate_youtube_description(captions, video_title="", include_timestamps=Fa
         # Timestamps (if requested)
         if include_timestamps:
             description_parts.append("⏰ Timestamps:")
-            # Simple timestamp generation based on sentence count
             sentences = [s.strip() for s in re.split(r'[.!?]+', clean_captions) if s.strip()]
             total_sentences = len(sentences)
             if total_sentences > 0:
-                for i in range(0, min(total_sentences, 5), 2):  # Every 2nd sentence, max 5 timestamps
+                for i in range(0, min(total_sentences, 5), 2):
                     minutes = (i * 2) // 60
                     seconds = (i * 2) % 60
                     timestamp = f"{minutes:02d}:{seconds:02d}"
@@ -310,6 +390,25 @@ def main():
             help="Title will be included in the description"
         )
         
+        custom_prompt = st.sidebar.text_area(
+            "Custom Prompt/Instructions",
+            placeholder="e.g., 'Create a description for a tech tutorial video focusing on beginners' or 'Make it sound professional and educational'",
+            help="Provide specific instructions for how you want the description to be written",
+            height=100
+        )
+        
+        # LLM Options
+        st.sidebar.subheader("🤖 LLM Options")
+        
+        use_openai = st.sidebar.checkbox(
+            "Use OpenAI GPT (Better Quality)",
+            value=False,
+            help="Requires OpenAI API key in secrets. Falls back to local generation if not available."
+        )
+        
+        if use_openai:
+            st.sidebar.info("💡 Add your OpenAI API key to Streamlit secrets for better descriptions")
+        
         include_timestamps = st.sidebar.checkbox(
             "Include Timestamps",
             value=False,
@@ -391,10 +490,11 @@ def main():
                     if generate_description:
                         st.header("📺 YouTube Description")
                         
-                        with st.spinner("Generating YouTube description..."):
-                            youtube_desc = generate_youtube_description(
+                        with st.spinner("Generating YouTube description with AI..."):
+                            youtube_desc = generate_youtube_description_with_llm(
                                 captions, 
                                 video_title, 
+                                custom_prompt,
                                 include_timestamps, 
                                 include_hashtags
                             )
@@ -507,9 +607,10 @@ def main():
                         
                         # Generate and download YouTube description if enabled
                         if generate_description:
-                            youtube_desc = generate_youtube_description(
+                            youtube_desc = generate_youtube_description_with_llm(
                                 result['captions'], 
                                 video_title, 
+                                custom_prompt,
                                 include_timestamps, 
                                 include_hashtags
                             )
@@ -603,7 +704,7 @@ def main():
     # Status section
     st.header("🔧 System Status")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         if check_ffmpeg():
@@ -617,6 +718,42 @@ def main():
             st.success("✅ Whisper is available")
         except ImportError:
             st.error("❌ Whisper not installed")
+    
+    with col3:
+        # Check OpenAI API key
+        try:
+            openai_key = st.secrets.get("OPENAI_API_KEY", None)
+            if openai_key:
+                st.success("✅ OpenAI API configured")
+            else:
+                st.info("ℹ️ OpenAI API not configured")
+        except:
+            st.info("ℹ️ OpenAI API not configured")
+    
+    # OpenAI API Setup Instructions
+    if generate_description:
+        with st.expander("🔑 OpenAI API Setup (Optional)"):
+            st.markdown("""
+            **For better YouTube descriptions, you can use OpenAI GPT:**
+            
+            1. **Get OpenAI API Key:**
+               - Go to https://platform.openai.com/api-keys
+               - Create a new API key
+            
+            2. **Add to Streamlit Secrets:**
+               - In Streamlit Cloud: Go to your app settings
+               - Add secret: `OPENAI_API_KEY` = `your-api-key-here`
+               - Or locally: Create `.streamlit/secrets.toml`:
+                 ```toml
+                 OPENAI_API_KEY = "your-api-key-here"
+                 ```
+            
+            3. **Enable in Settings:**
+               - Check "Use OpenAI GPT (Better Quality)" in sidebar
+               - Descriptions will be much more engaging and professional
+            
+            **Cost:** ~$0.002 per description (very affordable)
+            """)
     
     # Footer
     st.markdown("---")

@@ -133,11 +133,13 @@ python app.py --folder your_videos_folder/
 - 💾 **Organized Results**: Each video's captions are clearly labeled
 - 🎨 **Clean Layout**: Results displayed in organized columns
 
-## 📺 **YouTube Description Generator:**
+## 📺 **AI-Powered YouTube Description Generator:**
 
-### **Automatic Description Creation:**
-- 🎬 **Video Summary**: Auto-generated from captions
-- 🔑 **Key Topics**: Extracted keywords and topics
+### **LLM-Powered Description Creation:**
+- 🤖 **OpenAI GPT Integration**: Professional, engaging descriptions
+- 📝 **Custom Prompts**: Provide specific instructions for description style
+- 🎬 **Video Summary**: AI-generated summaries from captions
+- 🔑 **Smart Keywords**: Intelligent keyword extraction and SEO optimization
 - ⏰ **Timestamps**: Optional timestamp generation
 - 🏷️ **Hashtags**: Relevant hashtags for better discoverability
 - 👍 **Call to Action**: Professional engagement prompts
@@ -145,9 +147,17 @@ python app.py --folder your_videos_folder/
 
 ### **Customization Options:**
 - **Video Title**: Add your custom video title
+- **Custom Prompt**: Specify how you want the description written
+- **LLM Options**: Choose between OpenAI GPT (premium) or local generation
 - **Timestamps**: Include/exclude timestamps
 - **Hashtags**: Include/exclude hashtags
 - **Download Options**: Captions only, description only, or both combined
+
+### **Example Custom Prompts:**
+- "Create a description for a tech tutorial video focusing on beginners"
+- "Make it sound professional and educational with technical details"
+- "Write in a casual, friendly tone for a gaming audience"
+- "Focus on the benefits and outcomes for business viewers"
 
 ## 🆘 **Troubleshooting:**
 
