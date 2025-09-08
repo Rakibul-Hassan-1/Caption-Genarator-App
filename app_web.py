@@ -16,18 +16,40 @@ try:
 except Exception:
     pass
 
-# Check if FFmpeg is available
+# Check if FFmpeg is available (fallback to imageio-ffmpeg binary on cloud)
 def check_ffmpeg():
-    """Check if FFmpeg is available in the system"""
+    """Check/provide FFmpeg. Returns True if available and usable."""
     try:
-        result = subprocess.run(['ffmpeg', '-version'], 
-                              capture_output=True, text=True, check=False)
+        # First try system ffmpeg
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, check=False)
         if result.returncode == 0:
             return True
-        else:
-            return False
-    except FileNotFoundError:
+    except Exception:
+        pass
+
+    # Try to provide ffmpeg via imageio-ffmpeg
+    try:
+        import imageio_ffmpeg
+        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+        return os.path.exists(ffmpeg_path)
+    except Exception:
         return False
+
+def get_ffmpeg_exe():
+    """Return a path to an ffmpeg executable (system or bundled)."""
+    # Prefer system ffmpeg if present
+    try:
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            return 'ffmpeg'
+    except Exception:
+        pass
+    # Fallback to imageio-ffmpeg-provided binary
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return 'ffmpeg'
 
 def extract_audio(video_path, audio_path=None):
     """Extract audio from video using FFmpeg"""
@@ -37,8 +59,9 @@ def extract_audio(video_path, audio_path=None):
             with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_audio:
                 audio_path = tmp_audio.name
         
+        ffmpeg_exe = get_ffmpeg_exe()
         cmd = [
-            'ffmpeg',
+            ffmpeg_exe,
             '-i', video_path,
             '-vn',
             '-acodec', 'pcm_s16le',
@@ -65,54 +88,65 @@ def extract_audio(video_path, audio_path=None):
         return None
 
 def transcribe_audio(audio_path, model_size="base", language=None):
-    """Transcribe audio using Whisper"""
+    """Transcribe audio using faster-whisper when available (cloud-friendly)."""
     try:
-        import whisper
-        
         # Check if audio file exists
         if not os.path.exists(audio_path):
             st.error(f"Audio file not found: {audio_path}")
             return None
-        
+
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
-        status_text.text(f"Loading Whisper model: {model_size}")
-        progress_bar.progress(20)
-        
-        model = whisper.load_model(model_size)
-        progress_bar.progress(40)
-        
-        options = {
-            "language": language,
-            "task": "transcribe",
-            "fp16": False,
-            "verbose": False,
-            "temperature": 0.0,
-        }
-        
-        status_text.text("Transcribing audio...")
-        progress_bar.progress(60)
-        
-        result = model.transcribe(audio_path, **options)
-        progress_bar.progress(80)
-        
-        text = result["text"].strip()
-        
+
+        # Prefer faster-whisper
+        try:
+            from faster_whisper import WhisperModel
+            status_text.text(f"Loading faster-whisper model: {model_size}")
+            progress_bar.progress(20)
+            model = WhisperModel(model_size, device="cpu", compute_type="int8")
+            progress_bar.progress(40)
+
+            status_text.text("Transcribing audio...")
+            progress_bar.progress(60)
+            segments, _info = model.transcribe(audio_path, language=language, beam_size=1)
+            text_parts = []
+            for seg in segments:
+                if seg.text:
+                    text_parts.append(seg.text.strip())
+            text = ' '.join(text_parts).strip()
+        except Exception:
+            # Fallback to openai-whisper if available locally
+            try:
+                import whisper
+                status_text.text(f"Loading Whisper model: {model_size}")
+                progress_bar.progress(20)
+                model = whisper.load_model(model_size)
+                progress_bar.progress(40)
+                options = {
+                    "language": language,
+                    "task": "transcribe",
+                    "fp16": False,
+                    "verbose": False,
+                    "temperature": 0.0,
+                }
+                status_text.text("Transcribing audio...")
+                progress_bar.progress(60)
+                result = model.transcribe(audio_path, **options)
+                text = result.get("text", "").strip()
+            except Exception as e:
+                st.error(f"Transcription failed: {e}")
+                return None
+
         if text:
             text = ' '.join(text.split())
             text = text.replace('  ', ' ')
             if not text.endswith(('.', '!', '?')):
                 text += '.'
-        
+
         progress_bar.progress(100)
         status_text.text("Transcription completed!")
-        
         return text
-        
-    except ImportError:
-        st.error("Whisper is not installed. Please install it with: pip install openai-whisper")
-        return None
+
     except Exception as e:
         st.error(f"Error transcribing audio: {e}")
         return None
@@ -777,11 +811,16 @@ def main():
             st.error("❌ FFmpeg not found")
     
     with col2:
+        # Report availability of transcription backends
         try:
-            import whisper
-            st.success("✅ Whisper is available")
-        except ImportError:
-            st.error("❌ Whisper not installed")
+            from faster_whisper import WhisperModel  # noqa: F401
+            st.success("✅ faster-whisper available")
+        except Exception:
+            try:
+                import whisper  # noqa: F401
+                st.info("ℹ️ Using openai-whisper (local)")
+            except Exception:
+                st.error("❌ No transcription backend available")
     
     with col3:
         # Check OpenRouter API key
@@ -831,7 +870,7 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666;'>
-        <p>🎬 Caption Generator App | Powered by OpenAI Whisper, OpenRouter GPT-4o & FFmpeg</p>
+        <p>🎬 Caption Generator App | Powered by faster-whisper, OpenRouter GPT-4o & FFmpeg</p>
         <p>Made with ❤️ for content creators</p>
     </div>
     """, unsafe_allow_html=True)
