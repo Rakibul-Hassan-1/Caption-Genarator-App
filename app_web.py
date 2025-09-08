@@ -193,8 +193,13 @@ def generate_youtube_description_with_llm(captions, video_title="", custom_promp
         # Check if OpenRouter API key is available and user wants to use it
         if use_openrouter:
             try:
-                # Use the provided API key directly
-                openrouter_api_key = "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"
+                # Try to get API key from secrets, fallback to hardcoded for local development
+                try:
+                    openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY", None)
+                except:
+                    # Fallback for local development
+                    openrouter_api_key = "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"
+                
                 if openrouter_api_key:
                     return generate_with_openai(captions, video_title, custom_prompt, include_timestamps, include_hashtags, openrouter_api_key)
                 else:
@@ -781,7 +786,11 @@ def main():
     with col3:
         # Check OpenRouter API key
         try:
-            openrouter_key = "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"
+            openrouter_key = st.secrets.get("OPENROUTER_API_KEY", None)
+            if not openrouter_key:
+                # Fallback for local development
+                openrouter_key = "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"
+            
             if openrouter_key:
                 st.success("✅ OpenRouter API configured")
             else:
