@@ -1,9 +1,5 @@
 # 🎬 Caption Generator App - Final Version
 
-## 🚀 **READY TO USE - NO ERRORS!**
-
-Your Caption Generator App is now complete and error-free! Here are all the ways to use it:
-
 ## 📱 **Option 1: Web Interface (Recommended)**
 
 ### **Quick Start:**
@@ -196,5 +192,3 @@ Your Caption Generator App is now:
 
 ---
 
-**Made with ❤️ for content creators who need high-quality captions!**
-# Caption-Genarator-App
