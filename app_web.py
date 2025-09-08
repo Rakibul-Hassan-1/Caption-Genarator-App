@@ -9,6 +9,13 @@ import re
 import requests
 import json
 
+# Ensure higher upload limit is reflected in the app UI/runtime
+try:
+    import streamlit as st  # already imported above; kept for clarity in some IDEs
+    st.set_option('server.maxUploadSize', 4096)
+except Exception:
+    pass
+
 # Check if FFmpeg is available
 def check_ffmpeg():
     """Check if FFmpeg is available in the system"""
@@ -22,9 +29,14 @@ def check_ffmpeg():
     except FileNotFoundError:
         return False
 
-def extract_audio(video_path, audio_path="temp_audio.wav"):
+def extract_audio(video_path, audio_path=None):
     """Extract audio from video using FFmpeg"""
     try:
+        # Create a temporary audio file if not provided
+        if audio_path is None:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_audio:
+                audio_path = tmp_audio.name
+        
         cmd = [
             'ffmpeg',
             '-i', video_path,
@@ -42,8 +54,12 @@ def extract_audio(video_path, audio_path="temp_audio.wav"):
         if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
             return audio_path
         else:
+            st.error("Audio extraction failed - output file is empty or missing")
             return None
             
+    except subprocess.CalledProcessError as e:
+        st.error(f"FFmpeg error: {e.stderr if e.stderr else e}")
+        return None
     except Exception as e:
         st.error(f"Error extracting audio: {e}")
         return None
@@ -52,6 +68,11 @@ def transcribe_audio(audio_path, model_size="base", language=None):
     """Transcribe audio using Whisper"""
     try:
         import whisper
+        
+        # Check if audio file exists
+        if not os.path.exists(audio_path):
+            st.error(f"Audio file not found: {audio_path}")
+            return None
         
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -106,6 +127,7 @@ def process_video(video_file, model_size="base", language=None, video_name="vide
         tmp_file.write(video_file.read())
         video_path = tmp_file.name
     
+    audio_path = None
     try:
         st.info(f"Processing {video_name}...")
         
@@ -125,7 +147,7 @@ def process_video(video_file, model_size="base", language=None, video_name="vide
         try:
             if os.path.exists(video_path):
                 os.remove(video_path)
-            if os.path.exists(audio_path):
+            if audio_path and os.path.exists(audio_path):
                 os.remove(audio_path)
         except Exception as e:
             st.warning(f"Could not remove temporary files: {e}")
@@ -165,19 +187,20 @@ def process_batch_videos(video_files, model_size="base", language=None):
     status_text.text("Batch processing completed!")
     return results
 
-def generate_youtube_description_with_llm(captions, video_title="", custom_prompt="", include_timestamps=False, include_hashtags=True, use_openai=False):
-    """Generate YouTube description using LLM (OpenAI API or local model)"""
+def generate_youtube_description_with_llm(captions, video_title="", custom_prompt="", include_timestamps=False, include_hashtags=True, use_openrouter=False):
+    """Generate YouTube description using LLM (OpenRouter API or local model)"""
     try:
-        # Check if OpenAI API key is available and user wants to use it
-        if use_openai:
+        # Check if OpenRouter API key is available and user wants to use it
+        if use_openrouter:
             try:
-                openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
-                if openai_api_key:
-                    return generate_with_openai(captions, video_title, custom_prompt, include_timestamps, include_hashtags, openai_api_key)
+                # Use the provided API key directly
+                openrouter_api_key = "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"
+                if openrouter_api_key:
+                    return generate_with_openai(captions, video_title, custom_prompt, include_timestamps, include_hashtags, openrouter_api_key)
                 else:
-                    st.warning("OpenAI API key not found in secrets. Using local generation instead.")
+                    st.warning("OpenRouter API key not found. Using local generation instead.")
             except Exception as e:
-                st.warning(f"Could not access OpenAI API: {e}. Using local generation instead.")
+                st.warning(f"Could not access OpenRouter API: {e}. Using local generation instead.")
         
         # Use local generation (fallback or default)
         return generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags)
@@ -186,7 +209,7 @@ def generate_youtube_description_with_llm(captions, video_title="", custom_promp
         return f"Error generating description: {e}"
 
 def generate_with_openai(captions, video_title, custom_prompt, include_timestamps, include_hashtags, api_key):
-    """Generate description using OpenAI API"""
+    """Generate description using OpenRouter API (GPT-4o)"""
     try:
         # Prepare the prompt
         system_prompt = """You are a professional YouTube content creator and SEO expert. Create an engaging, SEO-optimized YouTube description based on the video captions provided. The description should be professional, engaging, and optimized for YouTube's algorithm."""
@@ -215,21 +238,23 @@ Format the description with proper sections and emojis for better readability.
         
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://caption-generator-app.streamlit.app",
+            "X-Title": "Caption Generator App"
         }
         
         data = {
-            "model": "gpt-3.5-turbo",
+            "model": "openai/gpt-4o",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "max_tokens": 1000,
+            "max_tokens": 1500,
             "temperature": 0.7
         }
         
         response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
+            "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
             json=data,
             timeout=30
@@ -239,11 +264,11 @@ Format the description with proper sections and emojis for better readability.
             result = response.json()
             return result["choices"][0]["message"]["content"]
         else:
-            st.error(f"OpenAI API Error: {response.status_code}")
+            st.error(f"OpenRouter API Error: {response.status_code} - {response.text}")
             return generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags)
             
     except Exception as e:
-        st.warning(f"OpenAI API failed: {e}. Using local generation.")
+        st.warning(f"OpenRouter API failed: {e}. Using local generation.")
         return generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags)
 
 def generate_with_local_llm(captions, video_title, custom_prompt, include_timestamps, include_hashtags):
@@ -431,14 +456,15 @@ def main():
         # LLM Options
         st.sidebar.subheader("🤖 LLM Options")
         
-        use_openai = st.sidebar.checkbox(
-            "Use OpenAI GPT (Better Quality)",
-            value=False,
-            help="Requires OpenAI API key in secrets. Falls back to local generation if not available."
+        use_openrouter = st.sidebar.checkbox(
+            "Use OpenRouter GPT-4o (Premium Quality)",
+            value=True,
+            help="Uses GPT-4o via OpenRouter for high-quality descriptions. Falls back to local generation if unavailable."
         )
         
-        if use_openai:
-            st.sidebar.info("💡 Add your OpenAI API key to Streamlit secrets for better descriptions")
+        if use_openrouter:
+            st.sidebar.success("✅ OpenRouter GPT-4o is configured and ready!")
+            st.sidebar.info("💡 Premium AI-powered descriptions with GPT-4o")
         
         include_timestamps = st.sidebar.checkbox(
             "Include Timestamps",
@@ -528,7 +554,7 @@ def main():
                                 custom_prompt,
                                 include_timestamps, 
                                 include_hashtags,
-                                use_openai
+                                use_openrouter
                             )
                         
                         st.text_area(
@@ -645,7 +671,7 @@ def main():
                                 custom_prompt,
                                 include_timestamps, 
                                 include_hashtags,
-                                use_openai
+                                use_openrouter
                             )
                             
                             st.download_button(
@@ -753,46 +779,50 @@ def main():
             st.error("❌ Whisper not installed")
     
     with col3:
-        # Check OpenAI API key
+        # Check OpenRouter API key
         try:
-            openai_key = st.secrets.get("OPENAI_API_KEY", None)
-            if openai_key:
-                st.success("✅ OpenAI API configured")
+            openrouter_key = "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"
+            if openrouter_key:
+                st.success("✅ OpenRouter API configured")
             else:
-                st.info("ℹ️ OpenAI API not configured")
+                st.info("ℹ️ OpenRouter API not configured")
         except Exception:
-            st.info("ℹ️ OpenAI API not configured")
+            st.info("ℹ️ OpenRouter API not configured")
     
-    # OpenAI API Setup Instructions
+    # OpenRouter API Setup Instructions
     if generate_description:
-        with st.expander("🔑 OpenAI API Setup (Optional)"):
+        with st.expander("🔑 OpenRouter API Information"):
             st.markdown("""
-            **For better YouTube descriptions, you can use OpenAI GPT:**
+            **Premium AI-powered YouTube descriptions with GPT-4o:**
             
-            1. **Get OpenAI API Key:**
-               - Go to https://platform.openai.com/api-keys
-               - Create a new API key
+            ✅ **Already Configured!** Your OpenRouter API key is integrated.
             
-            2. **Add to Streamlit Secrets:**
-               - In Streamlit Cloud: Go to your app settings
-               - Add secret: `OPENAI_API_KEY` = `your-api-key-here`
-               - Or locally: Create `.streamlit/secrets.toml`:
-                 ```toml
-                 OPENAI_API_KEY = "your-api-key-here"
-                 ```
+            **Features:**
+            - Uses GPT-4o for superior description quality
+            - Professional, engaging, and SEO-optimized content
+            - Automatic fallback to local generation if needed
+            - Enhanced creativity and context understanding
             
-            3. **Enable in Settings:**
-               - Check "Use OpenAI GPT (Better Quality)" in sidebar
-               - Descriptions will be much more engaging and professional
+            **Benefits:**
+            - Much higher quality than local generation
+            - Better SEO optimization
+            - More engaging call-to-actions
+            - Professional formatting with emojis and sections
             
-            **Cost:** ~$0.002 per description (very affordable)
+            **Cost:** Very affordable per description (~$0.01-0.05)
+            
+            **How it works:**
+            1. Enable "Use OpenRouter GPT-4o" in sidebar (default: ON)
+            2. Upload your video and generate captions
+            3. Get premium AI-generated YouTube descriptions
+            4. Download or copy the professional descriptions
             """)
     
     # Footer
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666;'>
-        <p>🎬 Caption Generator App | Powered by OpenAI Whisper & FFmpeg</p>
+        <p>🎬 Caption Generator App | Powered by OpenAI Whisper, OpenRouter GPT-4o & FFmpeg</p>
         <p>Made with ❤️ for content creators</p>
     </div>
     """, unsafe_allow_html=True)
